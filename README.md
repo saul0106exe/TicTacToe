@@ -2,7 +2,7 @@
 
 A clean, interactive, and GUI-based Tic Tac Toe game built using Python's `tkinter` module. This version features player name customization, dynamic turn switching, game reset, and embedded social links!
 
-![Screenshot](ttt_s_preview.png)
+![Screenshot](ttt_ss_preview.png)
 
 ---
 
