@@ -1,8 +1,9 @@
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, Toplevel, Entry
 from PIL import Image, ImageTk
+import random
+import time
 import webbrowser
-import random 
 
 def initialize_board():
     return [[' ' for _ in range(3)] for _ in range(3)]
@@ -50,17 +51,24 @@ class TicTacToeGUI:
 
         self.player_name_vars = [tk.StringVar(value="Player 1"), tk.StringVar(value="Player 2")]
         self.player_names_actual = ["", ""]  
-        self.starter_player_index = 0 
 
         self.current_turn_player_name = ""  
         self.current_turn_symbol = 'X' 
+
+
+        self.secret_click_count = 0
+        self.last_secret_click_time = 0
+        self.secret_two_turns_enabled = False
+        self.consecutive_moves_made = 0
 
         
         self.player_symbol = 'X'  
         self.bot_symbol = 'O'    
 
-        self.game_mode = tk.StringVar(value="PvP") 
-        self.is_bot_turn_flag = False 
+        self.game_mode = tk.StringVar(value="PvP")
+        self.difficulty_level = tk.StringVar(value="Normal")
+        self.player_symbol_choice = tk.StringVar(value='X')
+        self.is_bot_turn_flag = False
 
         game_mode_frame = tk.Frame(master)
         game_mode_frame.grid(row=0, column=0, columnspan=3, pady=(10, 0), padx=10, sticky="w")
@@ -69,6 +77,14 @@ class TicTacToeGUI:
         pvp_radio.pack(side=tk.LEFT)
         pvbot_radio = tk.Radiobutton(game_mode_frame, text="Player vs Bot", variable=self.game_mode, value="PvBot", command=self.on_game_mode_change, font=('Arial', 12))
         pvbot_radio.pack(side=tk.LEFT, padx=(10, 0))
+
+        self.difficulty_frame = tk.Frame(game_mode_frame)
+        tk.Label(self.difficulty_frame, text="Difficulty:", font=('Arial', 12)).pack(side=tk.LEFT, padx=(10, 5))
+        easy_radio = tk.Radiobutton(self.difficulty_frame, text="Easy", variable=self.difficulty_level, value="Easy", command=self.reset_game, font=('Arial', 12))
+        easy_radio.pack(side=tk.LEFT)
+        normal_radio = tk.Radiobutton(self.difficulty_frame, text="Normal", variable=self.difficulty_level, value="Normal", command=self.reset_game, font=('Arial', 12))
+        normal_radio.pack(side=tk.LEFT)
+        self.difficulty_frame.pack(side=tk.LEFT)
 
         player_info_frame = tk.Frame(master)
         player_info_frame.grid(row=1, column=0, columnspan=3, pady=(5, 5), padx=10) 
@@ -80,6 +96,14 @@ class TicTacToeGUI:
         tk.Label(player_info_frame, text="Player 2:", font=('Arial', 12)).grid(row=1, column=0, padx=(0,5), pady=2, sticky="e")
         self.p2_name_entry = tk.Entry(player_info_frame, textvariable=self.player_name_vars[1], font=('Arial', 12), width=15)
         self.p2_name_entry.grid(row=1, column=1, padx=(0,10), pady=2)
+
+        symbol_choice_frame = tk.Frame(player_info_frame)
+        symbol_choice_frame.grid(row=0, column=2, rowspan=2, padx=(10, 0))
+        tk.Label(symbol_choice_frame, text="P1 Symbol:", font=('Arial', 12)).pack()
+        x_radio = tk.Radiobutton(symbol_choice_frame, text="X", variable=self.player_symbol_choice, value="X", command=self.reset_game, font=('Arial', 12))
+        x_radio.pack()
+        o_radio = tk.Radiobutton(symbol_choice_frame, text="O", variable=self.player_symbol_choice, value="O", command=self.reset_game, font=('Arial', 12))
+        o_radio.pack()
 
         self.status_label = tk.Label(master, text="", font=('Arial', 14), pady=10)
         self.status_label.grid(row=2, column=0, columnspan=3) 
@@ -97,7 +121,8 @@ class TicTacToeGUI:
         
         self.on_game_mode_change() 
         
-        self.create_social_bar() 
+        self.create_social_bar()
+        
     def create_board_buttons(self):
         button_frame = tk.Frame(self.master)
         button_frame.grid(row=3, column=0, columnspan=3) 
@@ -113,45 +138,50 @@ class TicTacToeGUI:
         current_p2_name_in_var = self.player_name_vars[1].get()
         if self.game_mode.get() == "PvBot":
             self.p2_name_entry.config(state=tk.DISABLED)
-        else: 
+            self.difficulty_frame.pack(side=tk.LEFT)
+        else:
             self.p2_name_entry.config(state=tk.NORMAL)
             if current_p2_name_in_var in self.BOT_NAMES or current_p2_name_in_var == self.DEFAULT_BOT_NAME:
                 self.player_name_vars[1].set("Player 2")
+            self.difficulty_frame.pack_forget()
 
         self.reset_game()
 
     def configure_new_round(self):
         self.player_names_actual[0] = self.player_name_vars[0].get() or "Player 1"
-        
+        self.player_names_actual[1] = self.player_name_vars[1].get() or "Player 2"
+
+        p1_symbol = self.player_symbol_choice.get()
+        p2_symbol = 'O' if p1_symbol == 'X' else 'X'
+
         if self.game_mode.get() == "PvBot":
             self.player_names_actual[1] = self.player_name_vars[1].get()
-            if self.starter_player_index == 0:  
-                self.player_symbol = 'X' 
-                self.bot_symbol = 'O'    
-                self.current_turn_player_name = self.player_names_actual[0] 
-                self.current_turn_symbol = 'X' 
+            self.player_symbol = p1_symbol
+            self.bot_symbol = p2_symbol
+
+            if self.player_symbol == 'X':
+                self.current_turn_player_name = self.player_names_actual[0]
                 self.is_bot_turn_flag = False
-            else:  
-                self.bot_symbol = 'X'   
-                self.player_symbol = 'O' 
-                self.current_turn_player_name = self.player_names_actual[1]  
-                self.current_turn_symbol = 'X' 
+            else:
+                self.current_turn_player_name = self.player_names_actual[1]
                 self.is_bot_turn_flag = True
-        else:  
-            self.player_names_actual[1] = self.player_name_vars[1].get() or "Player 2"
+            self.current_turn_symbol = 'X'
+        else:  # PvP
             if self.player_names_actual[0] == self.player_names_actual[1] and self.player_names_actual[0] != "Bot":
-                self.player_names_actual[0] = f"{self.player_names_actual[0]} (X)"
-                self.player_names_actual[1] = f"{self.player_names_actual[1]} (O)"
-            
+                self.player_names_actual[0] = f"{self.player_names_actual[0]} ({p1_symbol})"
+                self.player_names_actual[1] = f"{self.player_names_actual[1]} ({p2_symbol})"
 
             self.current_turn_symbol = 'X'
-            self.current_turn_player_name = self.player_names_actual[self.starter_player_index]
+            if p1_symbol == 'X':
+                self.current_turn_player_name = self.player_names_actual[0]
+            else:
+                self.current_turn_player_name = self.player_names_actual[1]
             self.is_bot_turn_flag = False
 
         self.update_status_label(f"{self.current_turn_player_name}'s turn ({self.current_turn_symbol})")
 
         if self.game_mode.get() == "PvBot" and self.is_bot_turn_flag and not self.game_over:
-            self.master.after(100, self.trigger_bot_move) 
+            self.master.after(100, self.trigger_bot_move)
 
 
     def on_button_click(self, row, col):
@@ -180,6 +210,15 @@ class TicTacToeGUI:
             self.disable_all_board_buttons()
             return
         
+        is_p1_turn = self.current_turn_player_name == self.player_names_actual[0]
+        if self.secret_two_turns_enabled and is_p1_turn:
+            self.consecutive_moves_made += 1
+            if self.consecutive_moves_made < 2:
+                self.update_status_label(f"{self.current_turn_player_name}'s turn again!")
+                return
+            else:
+                self.consecutive_moves_made = 0
+        
         if self.game_mode.get() == "PvBot":
         
             self.current_turn_player_name = self.player_names_actual[1]
@@ -188,14 +227,14 @@ class TicTacToeGUI:
             self.update_status_label(f"{self.current_turn_player_name}'s turn ({self.current_turn_symbol})")
             self.master.after(500, self.trigger_bot_move)
         else:
-            player_x_name_for_round = self.player_names_actual[self.starter_player_index]
-            player_o_name_for_round = self.player_names_actual[1 - self.starter_player_index]
+            if self.current_turn_player_name == self.player_names_actual[0]:
+                self.current_turn_player_name = self.player_names_actual[1]
+            else:
+                self.current_turn_player_name = self.player_names_actual[0]
 
-            if self.current_turn_symbol == 'X': 
-                self.current_turn_player_name = player_o_name_for_round
+            if self.current_turn_symbol == 'X':
                 self.current_turn_symbol = 'O'
-            else:  
-                self.current_turn_player_name = player_x_name_for_round
+            else:
                 self.current_turn_symbol = 'X'
             self.update_status_label(f"{self.current_turn_player_name}'s turn ({self.current_turn_symbol})")
 
@@ -238,6 +277,16 @@ class TicTacToeGUI:
             self.is_bot_turn_flag = False
 
     def _find_best_bot_move(self):
+        if self.difficulty_level.get() == "Easy":
+            available_moves = []
+            for r_idx in range(3):
+                for c_idx in range(3):
+                    if self.board_state[r_idx][c_idx] == ' ':
+                        available_moves.append((r_idx, c_idx))
+            if available_moves:
+                return random.choice(available_moves)
+            return None
+
         human_actual_symbol = self.player_symbol
 
         move = self._find_critical_move(self.board_state, self.bot_symbol)
@@ -268,7 +317,7 @@ class TicTacToeGUI:
                     available_moves.append((r_idx, c_idx))
         if available_moves:
             return random.choice(available_moves)
-        return None 
+        return None
 
     def _find_critical_move(self, board, symbol_to_check):
         for r in range(3):
@@ -293,7 +342,7 @@ class TicTacToeGUI:
     def reset_game(self):
         self.board_state = initialize_board()
         self.game_over = False
-        self.starter_player_index = 1 - self.starter_player_index
+        self.consecutive_moves_made = 0
         
         current_game_mode = self.game_mode.get()
         if current_game_mode == "PvBot":
@@ -333,6 +382,7 @@ class TicTacToeGUI:
 
     def open_link(self, url):
         webbrowser.open_new_tab(url)
+
     def create_social_bar(self):
         social_frame = tk.Frame(self.master, pady=5, bg="gray") 
         social_frame.grid(row=5, column=0, columnspan=3, sticky="ew")
@@ -355,14 +405,11 @@ class TicTacToeGUI:
         github_button = tk.Button(social_frame, text="GitHub", font=('Arial', 10), command=lambda: self.open_link("https://github.com/saul0106exe"))
         github_button.pack(side=tk.RIGHT, padx=(5, 10))
 
-
         linkedin_button = tk.Button(social_frame, text="LinkedIn", font=('Arial', 10), command=lambda: self.open_link("https://www.linkedin.com/in/saull16/"))
         linkedin_button.pack(side=tk.RIGHT, padx=10)
 
-
         insta_button = tk.Button(social_frame, text="Instagram", font=('Arial', 10), command=lambda: self.open_link("https://www.instagram.com/_saul.exe/"))
         insta_button.pack(side=tk.RIGHT, padx=5)
-
 
 if __name__ == "__main__":
     root = tk.Tk()
